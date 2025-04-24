@@ -1,4 +1,5 @@
 from io import BytesIO
+import math
 import os
 import face_alignment
 import cv2
@@ -15,6 +16,7 @@ images_directory = "images/"
 
 @dataclasses.dataclass
 class Response:
+    face_polygon: List[tuple[int, int]]
     face_location: Union[List[int], None] = None
     image_size: Union[List[int], None] = None
 
@@ -43,7 +45,10 @@ if os.getenv("CPU"):
         device="cpu",
         flip_input=True,
         face_detector="blazeface",
-        face_detector_kwargs={"min_score_thresh": 0.8, "min_suppression_threshold": 0.5}
+        face_detector_kwargs={
+            "min_score_thresh": 0.8,
+            "min_suppression_threshold": 0.5,
+        },
     )
 else:
     detector = face_alignment.FaceAlignment(
@@ -83,7 +88,7 @@ def _define_glasses(image_buffer: BytesIO, landmarks: np.ndarray):
     xmin = min(landmarks[pred_types["nostril"]], key=lambda i: i[0])[0]
     xmax = max(landmarks[pred_types["nostril"]], key=lambda i: i[0])[0]
     ymin = min(landmarks[pred_types["face"]], key=lambda i: i[1])[1]
-    ymax = min(landmarks[pred_types['nose']], key=lambda i: i[1])[1]
+    ymax = min(landmarks[pred_types["nose"]], key=lambda i: i[1])[1]
 
     img2 = Image.open(image_buffer)
     img2 = img2.crop((xmin, ymin, xmax, ymax))
@@ -109,6 +114,22 @@ def _get_rotation(landmarks) -> float:
     return 1 - distance / width
 
 
+def clockwiseangle_and_distance(point, origin, refvec):
+    vector = [point[0] - origin[0], point[1] - origin[1]]
+    lenvector = math.hypot(vector[0], vector[1])
+    if lenvector == 0:
+        return -math.pi, 0
+
+    normalized = [vector[0] / lenvector, vector[1] / lenvector]
+    dotprod = normalized[0] * refvec[0] + normalized[1] * refvec[1]
+    diffprod = refvec[1] * normalized[0] - refvec[0] * normalized[1]
+    angle = math.atan2(diffprod, dotprod)
+
+    if angle < 0:
+        return 2 * math.pi + angle, lenvector
+    return angle, lenvector
+
+
 def recognize(image: Image) -> List[Response]:
     responses = []
     img = np.array(image)
@@ -122,6 +143,21 @@ def recognize(image: Image) -> List[Response]:
         top = min(landmark, key=lambda i: i[1])
         bottom = max(landmark, key=lambda i: i[1])
 
+        face_polygon = (
+            landmark[pred_types["face"]].tolist()
+            + landmark[pred_types["eyebrow1"]].tolist()
+            + landmark[pred_types["eyebrow2"]].tolist()
+        )
+        origin = face_polygon[0]
+        refvec = [0, 1]
+        face_polygon = map(lambda i: (int(i[0]), int(i[1])), face_polygon)
+        face_polygon = list(
+            sorted(
+                face_polygon,
+                key=lambda p: clockwiseangle_and_distance(p, origin, refvec),
+            )
+        )
+
         responses.append(
             Response(
                 face_location=[
@@ -129,7 +165,8 @@ def recognize(image: Image) -> List[Response]:
                     int(top[1]),
                     int(right[0]),
                     int(bottom[1]),
-                ],  # Response in face_recognition format
+                ],
+                face_polygon=face_polygon,
                 image_size=img.shape[:2],
             )
         )
