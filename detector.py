@@ -156,7 +156,7 @@ def recognize(image: Image) -> List[Response]:
                 face_polygon,
                 key=lambda p: clockwiseangle_and_distance(p, origin, refvec),
             )
-        )
+        )[1:]
 
         responses.append(
             Response(
