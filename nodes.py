@@ -71,10 +71,6 @@ class FacesDetectorNode:
         drawer.polygon(face.face_polygon, fill=(255, 255, 255))
         return transformed_image
 
-    def crop_face_from_image(self, transformed_image: Image, face: detector.Response):
-        cropped_image = transformed_image.crop(face.face_location)
-        return cropped_image
-
     def recognize(self, image: torch.Tensor) -> list[torch.Tensor]:
         transformed_image = T.ToPILImage()(torch.squeeze(image).permute(2, 0, 1))
         faces = detector.recognize(transformed_image)
@@ -89,13 +85,15 @@ class FacesDetectorNode:
             masked_image_tensor = T.PILToTensor()(masked_image).permute(1, 2, 0)
             tensors.append(masked_image_tensor)
 
-            image_face = self.crop_face_from_image(transformed_image.copy(), face)
-            image_face_tensor = T.PILToTensor()(image_face).permute(1, 2, 0)
+            image_face_tensor = image[:, face.face_location[1]:face.face_location[3], face.face_location[0]:face.face_location[2], :]
             image_faces.append(image_face_tensor)
 
         result = torch.stack(tensors)
 
         for _ in range(self.CROPPED_FACES_COUNT - len(image_faces)):
-            image_faces.append(torch.empty(0, 25))
+            r = torch.full([1, 1, 1, 1], 0)
+            g = torch.full([1, 1, 1, 1], 0)
+            b = torch.full([1, 1, 1, 1], 0)
+            image_faces.append(torch.cat((r, g, b), dim=-1))
 
         return [result] + image_faces

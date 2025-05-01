@@ -17,10 +17,10 @@ images_directory = "images/"
 @dataclasses.dataclass
 class Response:
     face_polygon: List[tuple[int, int]]
-    face_location: Union[List[int], None] = None
     left_eye: list[tuple[int, int]]
     right_eye: list[tuple[int, int]]
     nose: list[tuple[int, int]]
+    face_location: Union[List[int], None] = None
     image_size: Union[List[int], None] = None
 
 
