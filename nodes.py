@@ -45,8 +45,10 @@ class FacesDetectorNode:
             }
         }
 
-    RETURN_TYPES = ("IMAGE",)
-    RETURN_NAMES = ("masked_image",)
+    CROPPED_FACES_COUNT = 5  # Изменить это для увелечения кол-ва выходных лиц
+
+    RETURN_TYPES = ("IMAGE",) + ("IMAGE",) * CROPPED_FACES_COUNT
+    RETURN_NAMES = ("masked_image",) + tuple(f"image_face_{i}" for i in range(1, CROPPED_FACES_COUNT + 1))
     FUNCTION = "recognize"
     CATEGORY = "Roman"
     DESCRIPTION = """
@@ -69,7 +71,11 @@ class FacesDetectorNode:
         drawer.polygon(face.face_polygon, fill=(255, 255, 255))
         return transformed_image
 
-    def recognize(self, image: torch.Tensor) -> torch.Tensor:
+    def crop_face_from_image(self, transformed_image: Image, face: detector.Response):
+        cropped_image = transformed_image.crop(face.face_location)
+        return cropped_image
+
+    def recognize(self, image: torch.Tensor) -> list[torch.Tensor]:
         transformed_image = T.ToPILImage()(torch.squeeze(image).permute(2, 0, 1))
         faces = detector.recognize(transformed_image)
 
@@ -77,11 +83,19 @@ class FacesDetectorNode:
         H, W = samples.shape[3], samples.shape[2]
 
         tensors = []
+        image_faces = []
         for face in faces:
             masked_image = self.draw_masked_image(transformed_image.copy(), face)
             masked_image_tensor = T.PILToTensor()(masked_image).permute(1, 2, 0)
             tensors.append(masked_image_tensor)
 
+            image_face = self.crop_face_from_image(transformed_image.copy(), face)
+            image_face_tensor = T.PILToTensor()(image_face).permute(1, 2, 0)
+            image_faces.append(image_face_tensor)
+
         result = torch.stack(tensors)
 
-        return (result,)
+        for _ in range(self.CROPPED_FACES_COUNT - len(image_faces)):
+            image_faces.append(torch.empty(0, 25))
+
+        return [result] + image_faces

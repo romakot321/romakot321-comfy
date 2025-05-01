@@ -18,6 +18,9 @@ images_directory = "images/"
 class Response:
     face_polygon: List[tuple[int, int]]
     face_location: Union[List[int], None] = None
+    left_eye: list[tuple[int, int]]
+    right_eye: list[tuple[int, int]]
+    nose: list[tuple[int, int]]
     image_size: Union[List[int], None] = None
 
 
@@ -166,6 +169,9 @@ def recognize(image: Image) -> List[Response]:
                     int(right[0]),
                     int(bottom[1]),
                 ],
+                left_eye=landmark[pred_types["eye1"]].tolist(),
+                right_eye=landmark[pred_types["eye2"]].tolist(),
+                nose=landmark[pred_types["nostril"]].tolist(),
                 face_polygon=face_polygon,
                 image_size=img.shape[:2],
             )
