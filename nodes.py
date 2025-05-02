@@ -46,7 +46,7 @@ class FacesDetectorNode:
             }
         }
 
-    CROPPED_FACES_COUNT = 5  # Изменить это для увелечения кол-ва выходных лиц
+    CROPPED_FACES_COUNT = 4  # Изменить это для увелечения кол-ва выходных лиц
 
     RETURN_TYPES = ("IMAGE",) + ("IMAGE",) * CROPPED_FACES_COUNT
     RETURN_NAMES = ("masked_image",) + tuple(f"image_face_{i}" for i in range(1, CROPPED_FACES_COUNT + 1))
@@ -88,7 +88,7 @@ class FacesDetectorNode:
 
             left, top, right, bottom = face.face_location
 
-            center = ((right + left) // 2, (bottom + top) // 2)
+            center = [(right + left) // 2, (bottom + top) // 2]
             if center[0] - 256 < 0:
                 center[0] += abs(center[0] - 256)
             elif center[0] + 256 > face.image_size[0]:
