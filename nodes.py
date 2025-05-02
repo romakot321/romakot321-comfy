@@ -1,5 +1,6 @@
 import torchvision.transforms as T
 import torch
+import math
 from . import detector
 from PIL import Image, ImageDraw
 
@@ -85,7 +86,22 @@ class FacesDetectorNode:
             masked_image_tensor = T.PILToTensor()(masked_image).permute(1, 2, 0)
             tensors.append(masked_image_tensor)
 
-            image_face_tensor = image[:, face.face_location[1]:face.face_location[3], face.face_location[0]:face.face_location[2], :]
+            left, top, right, bottom = face.face_location
+
+            center = ((right + left) // 2, (bottom + top) // 2)
+            if center[0] - 256 < 0:
+                center[0] += abs(center[0] - 256)
+            elif center[0] + 256 > face.image_size[0]:
+                center[0] -= center[0] + 256 - face.image_size[0]
+            if center[1] - 256 < 0:
+                center[1] += abs(center[1] - 256)
+            elif center[1] + 256 > face.image_size[1]:
+                center[1] -= center[1] + 256 - face.image_size[1]
+
+            left, right = center[0] - 256, center[0] + 256
+            top, bottom = center[1] - 256, center[1] + 256
+
+            image_face_tensor = image[:, top:bottom, left:right, :]
             image_faces.append(image_face_tensor)
 
         result = torch.stack(tensors)

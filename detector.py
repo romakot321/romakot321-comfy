@@ -136,7 +136,7 @@ def clockwiseangle_and_distance(point, origin, refvec):
 def recognize(image: Image) -> List[Response]:
     responses = []
     img = np.array(image)
-    image_width, image_height, _ = img.shape
+    image_height, image_width, _ = img.shape
 
     face_landmarks_list = detector.get_landmarks(img)
 
@@ -173,7 +173,7 @@ def recognize(image: Image) -> List[Response]:
                 right_eye=landmark[pred_types["eye2"]].tolist(),
                 nose=landmark[pred_types["nostril"]].tolist(),
                 face_polygon=face_polygon,
-                image_size=img.shape[:2],
+                image_size=img.shape[:2][::-1],
             )
         )
     return responses
