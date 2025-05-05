@@ -1,9 +1,40 @@
 import torchvision.transforms as T
-import torch.nn.functional as nnf
 import torch
 import math
 from . import detector
 from PIL import Image, ImageDraw
+
+
+class FilterMaskSize:
+    """
+    Separates a mask into multiple contiguous components. Returns the individual masks created as well as a MASK_MAPPING which can be used in other nodes when dealing with batches.
+    """
+
+    def __init__(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {"mask": ("IMAGE",), "min_size": ("INT",)},
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("mask",)
+    FUNCTION = "separate"
+
+    CATEGORY = "Roman"
+
+    def separate(self, mask, min_size):
+        _, H, W = mask.shape
+        validated = []
+        for i in range(len(mask)):
+            if sum(sum(mask[i])).item() > min_size:
+                validated.append(mask[i])
+        result = torch.zeros([len(validated), H, W])
+        for i in range(len(validated)):
+            result[i] = validated[i]
+        return (result,)
 
 
 class FacesDetectorNode:
@@ -32,8 +63,8 @@ class FacesDetectorNode:
         return T.ToTensor()(cropped).permute(1, 2, 0).unsqueeze(3)
 
     def draw_masked_image(
-        self, transformed_image: Image.Image, face: detector.Response
-    ) -> Image.Image:
+        self, transformed_image: Image, face: detector.Response
+    ) -> Image:
         transformed_image.paste(
             (0, 0, 0), (0, 0, transformed_image.size[0], transformed_image.size[1])
         )
@@ -57,8 +88,7 @@ class FacesDetectorNode:
 
             left, top, right, bottom = face.face_location
             image_face_tensor = image[:, top:bottom, left:right, :]
-            image_face_tensor = nnf.interpolate(image_face_tensor, size=(512, 512), mode='bicubic', align_corners=False)
-            image_faces.append(image_face_tensor)
+            image_faces.append(T.Resize((512, 512))(image_face_tensor))
 
         for _ in range(self.CROPPED_FACES_COUNT - len(image_faces)):
             r = torch.full([1, 64, 64, 1], 0)
