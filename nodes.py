@@ -48,8 +48,8 @@ class FacesDetectorNode:
 
     CROPPED_FACES_COUNT = 4  # Изменить это для увелечения кол-ва выходных лиц
 
-    RETURN_TYPES = ("IMAGE",) + ("IMAGE",) * CROPPED_FACES_COUNT
-    RETURN_NAMES = ("masked_image",) + tuple(f"image_face_{i}" for i in range(1, CROPPED_FACES_COUNT + 1))
+    RETURN_TYPES = ("IMAGE",) * (CROPPED_FACES_COUNT * 2)
+    RETURN_NAMES = tuple("masked_image_" + str(i) for i in range(1, CROPPED_FACES_COUNT + 1)) + tuple(f"image_face_{i}" for i in range(1, CROPPED_FACES_COUNT + 1))
     FUNCTION = "recognize"
     CATEGORY = "Roman"
     DESCRIPTION = """
@@ -84,32 +84,17 @@ class FacesDetectorNode:
         for face in faces:
             masked_image = self.draw_masked_image(transformed_image.copy(), face)
             masked_image_tensor = T.PILToTensor()(masked_image).permute(1, 2, 0)
-            tensors.append(masked_image_tensor)
+            tensors.append(torch.unsqueeze(masked_image_tensor, dim=0))
 
             left, top, right, bottom = face.face_location
-
-            center = [(right + left) // 2, (bottom + top) // 2]
-            if center[0] - 256 < 0:
-                center[0] += abs(center[0] - 256)
-            elif center[0] + 256 > face.image_size[0]:
-                center[0] -= center[0] + 256 - face.image_size[0]
-            if center[1] - 256 < 0:
-                center[1] += abs(center[1] - 256)
-            elif center[1] + 256 > face.image_size[1]:
-                center[1] -= center[1] + 256 - face.image_size[1]
-
-            left, right = center[0] - 256, center[0] + 256
-            top, bottom = center[1] - 256, center[1] + 256
-
             image_face_tensor = image[:, top:bottom, left:right, :]
-            image_faces.append(image_face_tensor)
-
-        result = torch.stack(tensors)
+            image_faces.append(T.Resize((512, 512))(image_face_tensor))
 
         for _ in range(self.CROPPED_FACES_COUNT - len(image_faces)):
-            r = torch.full([1, 1, 1, 1], 0)
-            g = torch.full([1, 1, 1, 1], 0)
-            b = torch.full([1, 1, 1, 1], 0)
+            r = torch.full([1, 64, 64, 1], 0)
+            g = torch.full([1, 64, 64, 1], 0)
+            b = torch.full([1, 64, 64, 1], 0)
             image_faces.append(torch.cat((r, g, b), dim=-1))
+            tensors.append(torch.cat((r, g, b), dim=-1))
 
-        return [result] + image_faces
+        return tensors + image_faces
