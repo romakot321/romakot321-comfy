@@ -133,7 +133,21 @@ def clockwiseangle_and_distance(point, origin, refvec):
     return angle, lenvector
 
 
-def recognize(image: Image) -> List[Response]:
+def calculate_forehead_coordinates(brow_left, brow_right, eye_left, eye_right, chin, nose_tip) -> list[tuple[int, int]]:
+    # Вычисляем среднюю точку бровей
+    brow_mid = np.mean([brow_left, brow_right], axis=0)
+
+    # Вычисляем высоту лба как расстояние между кончиком носа и подбородком
+    height_nose_to_chin = np.linalg.norm(nose_tip - chin)
+
+    # Вычисляем координаты лба
+    forehead_x = brow_mid[0]
+    forehead_y = brow_mid[1] + height_nose_to_chin  # Поднимаем на высоту
+
+    return [(eye_right[0], forehead_y), (forehead_x, forehead_y), (eye_left[0], forehead_y)]
+
+
+def recognize(image: Image.Image) -> List[Response]:
     responses = []
     img = np.array(image)
     image_height, image_width, _ = img.shape
@@ -150,6 +164,14 @@ def recognize(image: Image) -> List[Response]:
             landmark[pred_types["face"]].tolist()
             + landmark[pred_types["eyebrow1"]].tolist()
             + landmark[pred_types["eyebrow2"]].tolist()
+            + calculate_forehead_coordinates(
+                min(landmark[pred_types["eyebrow1"]], key=lambda i: i[0]),
+                max(landmark[pred_types["eyebrow2"]], key=lambda i: i[0]),
+                min(landmark[pred_types["eye1"]], key=lambda i: i[0]),
+                max(landmark[pred_types["eye2"]], key=lambda i: i[0]),
+                bottom,
+                max(landmark[pred_types["nose"]], key=lambda i: i[1])
+            )
         )
         origin = face_polygon[0]
         refvec = [0, 1]
