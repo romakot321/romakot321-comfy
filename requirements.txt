@@ -8,3 +8,4 @@ setuptools==75.3.0
 wheel==0.45.1
 torch==2.6.0
 face-alignment==1.4.1
+mediapipe==0.10.21
