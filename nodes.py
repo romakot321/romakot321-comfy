@@ -1,4 +1,5 @@
 import torchvision.transforms as T
+import torch.nn.functional as nnf
 import torch
 import math
 from . import detector
@@ -88,7 +89,8 @@ class FacesDetectorNode:
 
             left, top, right, bottom = face.face_location
             image_face_tensor = image[:, top:bottom, left:right, :]
-            image_faces.append(T.Resize((512, 512))(image_face_tensor))
+            #image_face_tensor = nnf.interpolate(image_face_tensor, size=(1, 512, 512, 3), mode='bicubic', align_corners=False)
+            image_faces.append(image_face_tensor)
 
         for _ in range(self.CROPPED_FACES_COUNT - len(image_faces)):
             r = torch.full([1, 64, 64, 1], 0)

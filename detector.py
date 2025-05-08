@@ -1,7 +1,6 @@
 from io import BytesIO
 import math
 import os
-import face_alignment
 import cv2
 from scipy.spatial import distance as dist
 import dataclasses
@@ -10,8 +9,10 @@ from PIL import Image
 import numpy as np
 from typing import Union, List
 import torch
+import mediapipe as mp
 
 images_directory = "images/"
+mp_face_mesh = mp.solutions.face_mesh
 
 
 @dataclasses.dataclass
@@ -30,37 +31,15 @@ class Request:
     task_id: str
 
 
-pred_types = {
-    "face": slice(0, 17),
-    "eyebrow1": slice(17, 22),
-    "eyebrow2": slice(22, 27),
-    "nose": slice(27, 31),
-    "nostril": slice(31, 36),
-    "eye1": slice(36, 42),
-    "eye2": slice(42, 48),
-    "lips": slice(48, 60),
-    "teeth": slice(60, 68),
-}
-
-if os.getenv("CPU"):
-    detector = face_alignment.FaceAlignment(
-        face_alignment.LandmarksType.TWO_D,
-        device="cpu",
-        flip_input=True,
-        face_detector="blazeface",
-        face_detector_kwargs={
-            "min_score_thresh": 0.8,
-            "min_suppression_threshold": 0.5,
-        },
-    )
-else:
-    detector = face_alignment.FaceAlignment(
-        face_alignment.LandmarksType.TWO_D,
-        device="cuda",
-        dtype=torch.bfloat16,
-        flip_input=True,
-        face_detector="blazeface",
-    )
+face_oval_connections = [(10, 338), (338, 297), (297, 332), (332, 284),
+        (284, 251), (251, 389), (389, 356), (356, 454),
+        (454, 323), (323, 361), (361, 288), (288, 397),
+        (397, 365), (365, 379), (379, 378), (378, 400),
+        (400, 377), (377, 152), (152, 148), (148, 176),
+        (176, 149), (149, 150), (150, 136), (136, 172),
+        (172, 58), (58, 132), (132, 93), (93, 234),
+        (234, 127), (127, 162), (162, 21), (21, 54),
+        (54, 103), (103, 67), (67, 109), (109, 10)]
 
 
 class EnhancedJSONEncoder(json.JSONEncoder):
@@ -133,45 +112,35 @@ def clockwiseangle_and_distance(point, origin, refvec):
     return angle, lenvector
 
 
-def calculate_forehead_coordinates(brow_left, brow_right, eye_left, eye_right, chin, nose_tip) -> list[tuple[int, int]]:
-    # Вычисляем среднюю точку бровей
-    brow_mid = np.mean([brow_left, brow_right], axis=0)
-
-    # Вычисляем высоту лба как расстояние между кончиком носа и подбородком
-    height_nose_to_chin = np.linalg.norm(nose_tip - chin)
-
-    # Вычисляем координаты лба
-    forehead_x = brow_mid[0]
-    forehead_y = brow_mid[1] + height_nose_to_chin  # Поднимаем на высоту
-
-    return [(eye_right[0], forehead_y), (forehead_x, forehead_y), (eye_left[0], forehead_y)]
-
-
 def recognize(image: Image.Image) -> List[Response]:
     responses = []
     img = np.array(image)
     image_height, image_width, _ = img.shape
 
-    face_landmarks_list = detector.get_landmarks(img)
+    with mp_face_mesh.FaceMesh(
+        static_image_mode=True,
+        max_num_faces=5,
+        refine_landmarks=True,
+        min_detection_confidence=0.5) as face_mesh:
 
-    for landmark in face_landmarks_list:
+        results = face_mesh.process(img)
+
+    for face_mesh in results.multi_face_landmarks:
+        face_mesh = map(lambda i: (min(math.floor(i.x * image_width), image_width - 1), min(math.floor(i.y * image_height), image_height - 1)), face_mesh.landmark)
+        face_mesh = list(face_mesh)
+        landmark = []
+        for i, j in face_oval_connections:
+            landmark.append(face_mesh[j])
+
         left = min(landmark, key=lambda i: i[0])
         right = max(landmark, key=lambda i: i[0])
         top = min(landmark, key=lambda i: i[1])
         bottom = max(landmark, key=lambda i: i[1])
 
         face_polygon = (
-            landmark[pred_types["face"]].tolist()
-            + landmark[pred_types["eyebrow1"]].tolist()
-            + landmark[pred_types["eyebrow2"]].tolist()
-            + calculate_forehead_coordinates(
-                min(landmark[pred_types["eyebrow1"]], key=lambda i: i[0]),
-                max(landmark[pred_types["eyebrow2"]], key=lambda i: i[0]),
-                min(landmark[pred_types["eye1"]], key=lambda i: i[0]),
-                max(landmark[pred_types["eye2"]], key=lambda i: i[0]),
-                bottom,
-                max(landmark[pred_types["nose"]], key=lambda i: i[1])
-            )
+            landmark
+            # + landmark[pred_types["eyebrow1"]].tolist()
+            # + landmark[pred_types["eyebrow2"]].tolist()
         )
         origin = face_polygon[0]
         refvec = [0, 1]
@@ -191,9 +160,9 @@ def recognize(image: Image.Image) -> List[Response]:
                     int(right[0]),
                     int(bottom[1]),
                 ],
-                left_eye=landmark[pred_types["eye1"]].tolist(),
-                right_eye=landmark[pred_types["eye2"]].tolist(),
-                nose=landmark[pred_types["nostril"]].tolist(),
+                left_eye=[],
+                right_eye=[],
+                nose=[],
                 face_polygon=face_polygon,
                 image_size=img.shape[:2][::-1],
             )
