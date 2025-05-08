@@ -1,12 +1,12 @@
 from .nodes import FacesDetectorNode, FilterMaskSize
 
 NODE_CLASS_MAPPINGS = {
-    "FacesDetectorNode": FacesDetectorNode,
+    "Faces Crop&Mask": FacesDetectorNode,
     "FilterMaskSize": FilterMaskSize,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "FacesDetectorNode": "Detect Faces",
+    "Faces Crop&Mask": "Faces Crop&Mask",
     "FilterMaskSize": "Filer masks by size",
 }
 
