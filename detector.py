@@ -125,6 +125,9 @@ def recognize(image: Image.Image) -> List[Response]:
 
         results = face_mesh.process(img)
 
+    if not results.multi_face_landmarks:
+        return responses
+
     for face_mesh in results.multi_face_landmarks:
         face_mesh = map(lambda i: (min(math.floor(i.x * image_width), image_width - 1), min(math.floor(i.y * image_height), image_height - 1)), face_mesh.landmark)
         face_mesh = list(face_mesh)
